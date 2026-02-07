@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <title>地址相似度判定</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem auto; max-width: 800px; line-height: 1.6; }
+    textarea { width: 100%; min-height: 100px; margin-bottom: 1rem; }
+    button { padding: 0.6rem 1.2rem; font-size: 1rem; }
+    pre { background: #f5f5f5; padding: 1rem; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <h1>地址是否同一实体？</h1>
+  <p>请输入两段地址描述，点击“判定”即可查看系统判断。</p>
+
+  <label>地址 1：</label>
+  <textarea id="addr1" placeholder="例：蜀山区创新大道100号高新创新园A座01室"></textarea>
+
+  <label>地址 2：</label>
+  <textarea id="addr2" placeholder="例：合肥高新区创新大道100号创新园A座1层01室"></textarea>
+
+  <button onclick="submitCompare()">判定</button>
+
+  <h2>结果</h2>
+  <pre id="result">尚未查询</pre>
+
+  <script>
+    async function submitCompare() {
+      const addr1 = document.getElementById("addr1").value;
+      const addr2 = document.getElementById("addr2").value;
+      if (!addr1.trim() || !addr2.trim()) {
+        alert("请输入两个地址。");
+        return;
+      }
+      try {
+        const resp = await fetch("/compare", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ addr1, addr2 })
+        });
+        if (!resp.ok) {
+          const err = await resp.json();
+          throw new Error(err.detail || "请求失败");
+        }
+        const data = await resp.json();
+        document.getElementById("result").textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        document.getElementById("result").textContent = "错误：" + err.message;
+      }
+    }
+  </script>
+</body>
+</html>

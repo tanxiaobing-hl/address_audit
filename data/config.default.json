@@ -1,0 +1,33 @@
+{
+  "db_path": "data/address_governance.xlsx",
+  "grid_precision": 3,
+  "candidate_max": 30,
+  "candidate_topn_for_llm": 5,
+  "weights": {
+    "district": 2.0,
+    "aoi": 3.0,
+    "building": 4.0,
+    "floor": 2.5,
+    "room": 2.5,
+    "road": 3.0,
+    "shop": 1.5,
+    "geo": 5.0,
+    "relative_anchor": 2.0
+  },
+  "thresholds": {
+    "same": 0.78,
+    "unsure": 0.55
+  },
+  "parser": {
+    "llm_enabled": false,
+    "llm_missing_fields_trigger": [
+      "aoi",
+      "building",
+      "floor",
+      "room",
+      "road",
+      "road_no",
+      "district"
+    ]
+  }
+}

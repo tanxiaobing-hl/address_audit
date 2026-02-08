@@ -42,7 +42,7 @@ def main():
     for a in base["anchors"]:
         upsert_anchor(conn, a["anchor_id"], a.get("anchor_type"), a["key_text"], a.get("district"), a["lat"], a["lon"])
 
-    records, labels = generate_address_records(n_entities=30, variants_per_entity=5, seed=7)
+    records, labels = generate_address_records(n_entities=6, variants_per_entity=5, seed=7)
     for rec in records:
         upsert_record(conn, rec)
     insert_pair_labels(conn, labels)

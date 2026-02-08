@@ -31,8 +31,14 @@ from .models import AddressRecord
     负样本（label=0）：不同实体的变体随机配对，标记为“不应匹配”
     正负样本数量大致平衡，用于训练二分类模型
 """
+
+_rid_counter = 0
 def _rid() -> str:
-    return uuid.uuid4().hex[:10]
+    # return uuid.uuid4().hex[:10]
+    
+    global _rid_counter
+    _rid_counter += 1
+    return f"rid{_rid_counter:04d}"
 
 def seed_base_entities() -> Dict[str, List[Dict]]:
     # 道路数据，用于地址解析中的参考点

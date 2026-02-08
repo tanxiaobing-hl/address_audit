@@ -25,6 +25,7 @@ app = FastAPI(title="Address Comparison Service")
 class CompareRequest(BaseModel):
     addr1: str
     addr2: str
+    use_llm: bool = False
 
 
 @app.post("/compare")
@@ -33,7 +34,8 @@ def compare_addresses(payload: CompareRequest):
     addr2 = payload.addr2.strip()
     if not addr1 or not addr2:
         raise HTTPException(status_code=400, detail="addr1 和 addr2 不能为空")
-    result = pipeline.compare_addresses(addr1, addr2)
+    result = pipeline.compare_addresses(addr1, addr2, use_llm=payload.use_llm)
+    result["use_llm"] = payload.use_llm
     return result
 
 

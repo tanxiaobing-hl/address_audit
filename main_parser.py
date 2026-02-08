@@ -6,6 +6,9 @@ import json
 from address_audit.parser_llm import OpenAILLMParser
 from address_audit.utils import EnhancedJSONEncoder
 
+"""
+测试OpenAILLMParser 对一批地址的解析效果，输出原始地址和解析结果的对比，便于验证解析准确性和调试提示词。
+"""
 
 if __name__ == "__main__":
     llm_parser = OpenAILLMParser()

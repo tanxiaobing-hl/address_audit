@@ -20,6 +20,8 @@
   <label>地址 2：</label>
   <textarea id="addr2" placeholder="例：合肥高新区创新大道100号创新园A座1层01室"></textarea>
 
+  <label><input type="checkbox" id="use_llm" /> 启用 LLM 裁决</label>
+  <br/>
   <button onclick="submitCompare()">判定</button>
 
   <h2>结果</h2>
@@ -33,20 +35,22 @@
         alert("请输入两个地址。");
         return;
       }
+      const resultEl = document.getElementById("result");
+      resultEl.textContent = "请求中...";
       try {
         const resp = await fetch("/compare", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ addr1, addr2 })
+          body: JSON.stringify({ addr1, addr2, use_llm: document.getElementById("use_llm").checked })
         });
         if (!resp.ok) {
           const err = await resp.json();
           throw new Error(err.detail || "请求失败");
         }
         const data = await resp.json();
-        document.getElementById("result").textContent = JSON.stringify(data, null, 2);
+        resultEl.textContent = JSON.stringify(data, null, 2);
       } catch (err) {
-        document.getElementById("result").textContent = "错误：" + err.message;
+        resultEl.textContent = "错误：" + err.message;
       }
     }
   </script>

@@ -159,24 +159,6 @@ def get_parsed(conn: ExcelConnection, rid: str) -> Optional[Dict[str, Any]]:
         return None
     return _row_to_dict(match.iloc[0])
 
-def insert_conflicts(conn: ExcelConnection, conflicts: List[Conflict]) -> None:
-    if not conflicts:
-        return
-    df = conn.tables["conflicts"]
-    next_id = _next_pk(df)
-    rows = []
-    for c in conflicts:
-        rows.append({
-            "id": next_id,
-            "rid": c.rid,
-            "conflict_type": c.conflict_type,
-            "detail": c.detail,
-            "created_at": _now_str()
-        })
-        next_id += 1
-    df = pd.concat([df, pd.DataFrame(rows)], ignore_index=True)
-    conn.tables["conflicts"] = df
-    conn.save()
 
 def clear_table(conn: ExcelConnection, table: str) -> None:
     if table not in TABLE_SCHEMAS:

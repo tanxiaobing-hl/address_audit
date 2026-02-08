@@ -1,11 +1,16 @@
 from __future__ import annotations
 import json
+import logging
 import os
 import urllib.request
 from dataclasses import fields as dataclass_fields
 from typing import List
 
 from .models import ParsedAddress
+from .utils import normalize_text
+
+
+logger = logging.getLogger(__name__)
 
 LLM_PARSE_SCHEMA_HINT = {
     "province": "安徽省",
@@ -20,7 +25,7 @@ LLM_PARSE_SCHEMA_HINT = {
     "shop_name": "惠康大药房",
     "intersection": ["科学大道", "天波路"],
     "direction": "西北",
-    "distance_m": 40
+    "distance_m": 40,
 }
 
 LLM_ASSIGN_FIELDS = tuple(
@@ -39,6 +44,7 @@ class OpenAILLMParser:
 
     def parse(self, raw: str) -> ParsedAddress:
         api_key = self._require_key()
+        logger.debug("LLM parsing single address")
         obj = self._request_single(raw or "", api_key)
         return self._build_parsed(raw or "", obj)
 
@@ -46,6 +52,7 @@ class OpenAILLMParser:
         if not raws:
             return []
         api_key = self._require_key()
+        logger.debug("LLM parsing batch size=%d", len(raws))
         results = self._request_batch(raws, api_key)
         parsed: List[ParsedAddress] = []
         for raw, obj in zip(raws, results):
@@ -118,7 +125,7 @@ class OpenAILLMParser:
         return json.loads(content)
 
     def _build_parsed(self, raw: str, obj: dict) -> ParsedAddress:
-        parsed = ParsedAddress(norm_text=raw)
+        parsed = ParsedAddress(norm_text=normalize_text(raw))
         for key in LLM_ASSIGN_FIELDS:
             if key in obj and obj[key] not in (None, ""):
                 value = str(obj[key]) if key in {"road_no", "floor", "room"} else obj[key]
@@ -126,3 +133,4 @@ class OpenAILLMParser:
         if isinstance(obj.get("intersection"), list) and len(obj["intersection"]) == 2:
             parsed.intersection = (obj["intersection"][0], obj["intersection"][1])
         return parsed
+

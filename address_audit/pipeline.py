@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json
+import logging
 from dataclasses import asdict
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -10,7 +11,6 @@ from .db import (
     init_db,
     list_records,
     upsert_parsed,
-    insert_conflicts,
     insert_match_log,
     write_clusters,
     get_parsed,
@@ -21,9 +21,11 @@ from .base_data import load_alias_map
 from .parser_llm import OpenAILLMParser
 from .candidates import CandidateGenerator
 from .scoring import Scorer
-from .judge import Judge
-from .conflicts import ConflictChecker
+from .judge import Judge, ConflictChecker
 from .clustering import UnionFind
+
+
+logger = logging.getLogger(__name__)
 
 
 class AddressGovernancePipeline:
@@ -37,8 +39,9 @@ class AddressGovernancePipeline:
         self.parser = OpenAILLMParser()
         self.cand_gen = CandidateGenerator(cfg.grid_precision, aoi_alias, road_alias)
         self.scorer = Scorer(cfg.weights, cfg.thresholds)
-        self.judge = Judge(enable_llm=False)
+        self.judge = Judge()
         self.conflict_checker = ConflictChecker()
+        self.default_judge_use_llm = bool(cfg.parser.get("judge_use_llm", False))
 
     def run(self) -> Dict[str, Any]:
         conn = connect(self.cfg.db_path)
@@ -48,23 +51,21 @@ class AddressGovernancePipeline:
         records: List[AddressRecord] = []
         parsed: Dict[str, ParsedAddress] = {}
 
+        logger.info("Pipeline run started, records=%d", len(rec_rows))
         for row in rec_rows:
             rec = _row_to_record(row)
             records.append(rec)
 
             cached = get_parsed(conn, rec.rid)
             if cached:
+                logger.debug("Reuse cached parsing for %s", rec.rid)
                 parsed[rec.rid] = _row_to_parsed(cached)
             else:
-                p = self._alias_mapping_parsed_fields(self.parser.parse(rec.raw_address))
+                logger.debug("Parse new address for %s", rec.rid)
+                p = self._normalize_parsed_fields(self.parser.parse(rec.raw_address))
                 upsert_parsed(conn, rec.rid, p)
                 parsed[rec.rid] = p
 
-        conflicts: List[Conflict] = []
-        for rec in records:
-            conflicts.extend(self.conflict_checker.check(rec, parsed[rec.rid]))
-        if conflicts:
-            insert_conflicts(conn, conflicts)
 
         pairs = [(rec, parsed[rec.rid]) for rec in records]
         indexes = self.cand_gen.build_indexes(pairs)
@@ -110,7 +111,12 @@ class AddressGovernancePipeline:
             top_pairs = [item[0] for item in ranked]
             top_scores = [item[1] for item in ranked]
 
-            final = self.judge.judge((rec, pr), top_pairs, top_scores)
+            final = self.judge.judge(
+                (rec, pr),
+                top_pairs,
+                top_scores,
+                use_llm=self.default_judge_use_llm,
+            )
 
             if final.decision == "SAME":
                 best_rid = None
@@ -146,23 +152,29 @@ class AddressGovernancePipeline:
         groups = uf.groups()
         clusters: Dict[str, List[str]] = {f"cluster_{root}": members for root, members in groups.items()}
         write_clusters(conn, clusters)
+        logger.info("Pipeline run completed, clusters=%d", len(clusters))
 
         return {
             "n_records": len(records),
-            "n_conflicts": len(conflicts),
             "n_clusters_gt1": len([members for members in clusters.values() if len(members) > 1]),
         }
 
-    def compare_addresses(self, addr1: str, addr2: str) -> Dict[str, Any]:
-        """对两个地址文本执行与 run 相同的评分 + 裁决逻辑，返回判断结果。"""
+    def compare_addresses(self, addr1: str, addr2: str, use_llm: bool = False) -> Dict[str, Any]:
+        """对两个地址文本执行评分 + 裁决，返回判断结果。"""
         rec1 = AddressRecord(rid="addr_1", source="api", raw_address=addr1.strip())
         rec2 = AddressRecord(rid="addr_2", source="api", raw_address=addr2.strip())
 
-        parsed1 = self._alias_mapping_parsed_fields(self.parser.parse(rec1.raw_address))
-        parsed2 = self._alias_mapping_parsed_fields(self.parser.parse(rec2.raw_address))
+        parsed1 = self._normalize_parsed_fields(self.parser.parse(rec1.raw_address))
+        parsed2 = self._normalize_parsed_fields(self.parser.parse(rec2.raw_address))
 
         score = self.scorer.score_pair(rec1, parsed1, rec2, parsed2, relative_anchor_bonus=0.0)
-        final = self.judge.judge((rec1, parsed1), [(rec2, parsed2)], [score])
+        final = self.judge.judge((rec1, parsed1), [(rec2, parsed2)], [score], use_llm=use_llm)
+        logger.info(
+            "Compare result: %s (score=%.4f, use_llm=%s)",
+            final.decision,
+            final.score,
+            use_llm,
+        )
 
         return {
             "decision": final.decision,
@@ -173,7 +185,7 @@ class AddressGovernancePipeline:
             "addr2_parsed": asdict(parsed2),
         }
 
-    def _alias_mapping_parsed_fields(self, parsed: ParsedAddress) -> ParsedAddress:
+    def _normalize_parsed_fields(self, parsed: ParsedAddress) -> ParsedAddress:
         if parsed.aoi:
             parsed.aoi = self.cand_gen.canonical_aoi(parsed.aoi)
         if parsed.road:
@@ -252,3 +264,4 @@ def _row_to_record(row: Dict[str, Any]) -> AddressRecord:
         lon=row.get("lon"),
         extra=extra,
     )
+

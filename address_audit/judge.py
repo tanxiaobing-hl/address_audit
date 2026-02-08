@@ -60,7 +60,7 @@ class Judge:
     def __init__(self) -> None:
         self.llm_base_url = os.getenv("OPENAI_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1").rstrip("/")
         self.llm_model = os.getenv("OPENAI_MODEL", "qwen3-max")
-        self.llm_api_key_env = os.getenv("OPENAI_API_KEY_ENV", "INVALID_OPENAI_API_KEY_ENV")
+        self.llm_api_key = os.getenv("OPENAI_API_KEY", "")
         self.blacklist_checker = ConflictChecker()
 
     def judge(
@@ -149,8 +149,7 @@ class Judge:
         candidates: List[Tuple[AddressRecord, ParsedAddress]],
         pre_scores: List[MatchResult],
     ) -> Optional[MatchResult]:
-        api_key = os.getenv(self.llm_api_key_env, "")
-        if not api_key:
+        if not self.llm_api_key:
             return None
 
         payload = {
@@ -179,7 +178,7 @@ class Judge:
 
         req = urllib.request.Request(f"{self.llm_base_url}/chat/completions", data=body, method="POST")
         req.add_header("Content-Type", "application/json")
-        req.add_header("Authorization", f"Bearer {api_key}")
+        req.add_header("Authorization", f"Bearer {self.llm_api_key}")
 
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
